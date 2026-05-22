@@ -1,4 +1,6 @@
 const $ = id => (document.getElementById(id)?.value || "").trim();
+const HISTORICO_KEY = "evoResumoHistorico";
+let resumoEmEdicaoId = null;
 
 function showLoading(text="Processando..."){
   const overlay=document.getElementById("loadingOverlay");
@@ -81,8 +83,6 @@ async function buscarCNPJ(cnpjId="cnpj"){
       if(data.email) document.getElementById("email").value=data.email;
       if(data.ddd_telefone_1) document.getElementById("telefone").value=formatarTelefone(data.ddd_telefone_1);
       if(status){status.className="ok";status.textContent="Dados preenchidos automaticamente pelo CNPJ."}
-    }else{
-      if(data.razao_social) document.getElementById("vendCorretora").value=data.razao_social;
     }
   }catch(e){if(status){status.className="erro";status.textContent="Não foi possível consultar o CNPJ."}}
   hideLoading();
@@ -100,19 +100,19 @@ function montarParcelas(){
 }
 
 function aplicarMascaras(){
-  ["cnpj","vendCnpj"].forEach(id=>{
+  ["cnpj"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarCNPJ(el.value));
   });
-  ["cpfRepresentante","vendCpf"].forEach(id=>{
+  ["cpfRepresentante"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarCPF(el.value));
   });
-  ["cep","vendCep"].forEach(id=>{
+  ["cep"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarCEP(el.value));
   });
-  ["telefone","vendTelefone"].forEach(id=>{
+  ["telefone"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarTelefone(el.value));
   });
@@ -129,15 +129,152 @@ function aplicarMascaras(){
     }
   });
   document.getElementById("cep")?.addEventListener("blur",()=>buscarCEP("cep","endereco","municipio","uf","cepStatus"));
-  document.getElementById("vendCep")?.addEventListener("blur",()=>buscarCEP("vendCep","vendEndereco","municipio","uf","vendCepStatus"));
   document.getElementById("cnpj")?.addEventListener("blur",()=>buscarCNPJ("cnpj"));
-  document.getElementById("vendCnpj")?.addEventListener("blur",()=>buscarCNPJ("vendCnpj"));
+}
+
+function limparCampos(container){
+  container.querySelectorAll("input,textarea").forEach(el=>el.value="");
+  container.querySelectorAll("select").forEach(el=>el.value="");
+  container.querySelectorAll("small").forEach(el=>{el.textContent="";el.className=""});
+}
+
+function limparSecao(btn){
+  const card = btn.closest(".card");
+  if(!card) return;
+  limparCampos(card);
 }
 
 function limparFormulario(){
-  document.querySelectorAll("input,textarea").forEach(el=>el.value="");
-  document.querySelectorAll("select").forEach(el=>el.value="");
-  document.querySelectorAll("small").forEach(el=>{el.textContent="";el.className=""});
+  limparCampos(document);
+  resumoEmEdicaoId = null;
+  document.querySelectorAll(".history-item.editing").forEach(item=>item.classList.remove("editing"));
+}
+
+function adicionarBotoesLimparSecao(){
+  document.querySelectorAll(".card").forEach(card=>{
+    if(card.classList.contains("history-card")) return;
+    const h2 = card.querySelector("h2");
+    if(!h2 || card.querySelector(".clear-section-btn")) return;
+    const header = document.createElement("div");
+    header.className = "section-title-row";
+    h2.parentNode.insertBefore(header, h2);
+    header.appendChild(h2);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "clear-section-btn";
+    btn.textContent = "🧹 Limpar seção";
+    btn.addEventListener("click",()=>limparSecao(btn));
+    header.appendChild(btn);
+  });
+}
+
+function obterCamposFormulario(){
+  const data = {};
+  document.querySelectorAll("input,select,textarea").forEach(el=>{
+    if(el.id) data[el.id] = el.value;
+  });
+  return data;
+}
+
+function preencherFormulario(data={}){
+  Object.entries(data).forEach(([id,value])=>{
+    const el = document.getElementById(id);
+    if(el) el.value = value || "";
+  });
+}
+
+function lerHistorico(){
+  try{return JSON.parse(localStorage.getItem(HISTORICO_KEY) || "[]")}catch(e){return []}
+}
+
+function gravarHistorico(lista){
+  localStorage.setItem(HISTORICO_KEY, JSON.stringify(lista.slice(0,50)));
+}
+
+function tituloResumo(data){
+  return data.razaoSocial || data.cnpj || data.representante || "Resumo sem identificação";
+}
+
+function formatarDataHora(iso){
+  if(!iso) return "";
+  return new Date(iso).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
+}
+
+function salvarResumoLocal(silencioso=false){
+  const values = obterCamposFormulario();
+  const agora = new Date().toISOString();
+  let lista = lerHistorico();
+
+  if(resumoEmEdicaoId){
+    const idx = lista.findIndex(item=>item.id===resumoEmEdicaoId);
+    if(idx >= 0){
+      lista[idx] = {...lista[idx], title:tituloResumo(values), values, updatedAt:agora};
+    }else{
+      lista.unshift({id:resumoEmEdicaoId, title:tituloResumo(values), values, createdAt:agora, updatedAt:agora});
+    }
+  }else{
+    resumoEmEdicaoId = String(Date.now());
+    lista.unshift({id:resumoEmEdicaoId, title:tituloResumo(values), values, createdAt:agora, updatedAt:agora});
+  }
+
+  gravarHistorico(lista);
+  renderHistorico();
+  if(!silencioso) alert("Resumo salvo no histórico local.");
+}
+
+function carregarResumo(id){
+  const item = lerHistorico().find(r=>r.id===id);
+  if(!item) return;
+  preencherFormulario(item.values);
+  resumoEmEdicaoId = id;
+  renderHistorico();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function duplicarResumo(id){
+  const item = lerHistorico().find(r=>r.id===id);
+  if(!item) return;
+  preencherFormulario(item.values);
+  resumoEmEdicaoId = null;
+  salvarResumoLocal(true);
+  alert("Resumo duplicado no histórico local.");
+}
+
+function excluirResumo(id){
+  if(!confirm("Deseja excluir este resumo do histórico local?")) return;
+  const lista = lerHistorico().filter(r=>r.id!==id);
+  if(resumoEmEdicaoId===id) resumoEmEdicaoId = null;
+  gravarHistorico(lista);
+  renderHistorico();
+}
+
+function renderHistorico(){
+  const box = document.getElementById("historyList");
+  if(!box) return;
+  const lista = lerHistorico();
+  if(!lista.length){
+    box.className = "history-list empty-state";
+    box.textContent = "Nenhum resumo salvo até o momento.";
+    return;
+  }
+  box.className = "history-list";
+  box.innerHTML = lista.map(item=>`
+    <div class="history-item ${item.id===resumoEmEdicaoId ? "editing" : ""}">
+      <div>
+        <strong>${escapeHtml(item.title)}</strong>
+        <span>Criado em ${formatarDataHora(item.createdAt)}${item.updatedAt!==item.createdAt ? ` • Atualizado em ${formatarDataHora(item.updatedAt)}` : ""}</span>
+      </div>
+      <div class="history-actions">
+        <button type="button" onclick="carregarResumo('${item.id}')">Editar</button>
+        <button type="button" onclick="duplicarResumo('${item.id}')">Duplicar</button>
+        <button type="button" onclick="excluirResumo('${item.id}')">Excluir</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function escapeHtml(text){
+  return String(text || "").replace(/[&<>'"]/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[ch]));
 }
 
 function drawLogo(doc){
@@ -461,35 +598,6 @@ function paginaResumoContratual(doc){
   doc.setTextColor(0,0,0);
 }
 
-function paginaResumoVendedor(doc){
-  drawLogo(doc);
-  drawWatermark(doc);
-  doc.setFont("helvetica","bold");
-  doc.setFontSize(17);
-  doc.setTextColor(151,0,70);
-  doc.text("Resumo Vendedor",105,32,{align:"center"});
-  doc.setTextColor(0,0,0);
-  let x=5,y=42,w=200;
-  headerBar(doc,"DADOS DO VENDEDOR",y); y+=9;
-  labelValue(doc,"NOME",$("vendNome"),x,y,w,10.5,40,8); y+=10.5;
-  labelValue(doc,"CPF",$("vendCpf"),x,y,85,10.5,40,8);
-  labelValue(doc,"RG",$("vendRg"),x+85,y,55,10.5,14,8);
-  labelValue(doc,"SEXO",$("vendSexo"),x+140,y,60,10.5,22,8); y+=10.5;
-  labelValue(doc,"DATA DE NASCIMENTO",$("vendNascimento"),x,y,85,10.5,45,8);
-  labelValue(doc,"E-MAIL",$("vendEmail"),x+85,y,115,10.5,24,8); y+=10.5;
-  labelValue(doc,"ENDEREÇO",$("vendEndereco"),x,y,135,10.5,43,8);
-  labelValue(doc,"CEP",$("vendCep"),x+135,y,65,10.5,18,8); y+=10.5;
-  labelValue(doc,"TELEFONE",$("vendTelefone"),x,y,w,10.5,42,8); y+=10.5;
-  labelValue(doc,"CORRETORA",$("vendCorretora"),x,y,w,10.5,42,8); y+=10.5;
-  labelValue(doc,"CNPJ",$("vendCnpj"),x,y,w,10.5,42,8);
-  doc.setTextColor(151,0,70);
-  doc.setFontSize(7);
-  doc.text("evosaude.com.br",105,287,{align:"center"});
-  doc.setFillColor(151,0,70);
-  doc.rect(0,292,210,5,"F");
-  doc.setTextColor(0,0,0);
-}
-
 async function gerarPDF(){
   try{
     showLoading("Gerando PDF...");
@@ -509,8 +617,7 @@ async function gerarPDF(){
     });
 
     paginaResumoContratual(doc);
-    doc.addPage();
-    paginaResumoVendedor(doc);
+    salvarResumoLocal(true);
 
     hideLoading();
 
@@ -526,5 +633,10 @@ async function gerarPDF(){
 }
 
 document.addEventListener("DOMContentLoaded",()=>{
-  initTheme(); showSkeleton(); montarParcelas(); aplicarMascaras();
+  initTheme();
+  showSkeleton();
+  montarParcelas();
+  aplicarMascaras();
+  adicionarBotoesLimparSecao();
+  renderHistorico();
 });
