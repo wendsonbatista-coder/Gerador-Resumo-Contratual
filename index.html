@@ -101,6 +101,43 @@
       <label class="full">Observações<textarea id="observacoes" placeholder="Informe observações adicionais."></textarea></label>
     </section>
 
+    <section class="card seller-toggle-card">
+      <div class="section-title-row no-margin">
+        <div>
+          <h2>Cadastro do vendedor</h2>
+          <p class="section-help">Ative esta opção quando desejar preencher e incluir a página de resumo do vendedor no PDF.</p>
+        </div>
+        <label class="switch-label">
+          <input id="incluirVendedor" type="checkbox" checked onchange="toggleCadastroVendedor()">
+          <span class="switch-ui"></span>
+          <span>Incluir vendedor</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card" id="vendedorCard" data-optional-section="seller">
+      <h2>Resumo vendedor</h2>
+      <div class="grid">
+        <label>Nome<input id="vendNome"></label>
+        <label>CPF<input id="vendCpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00"></label>
+        <label>RG<input id="vendRg"></label>
+        <label>Sexo
+          <select id="vendSexo">
+            <option value="">Selecione</option>
+            <option>Masculino</option>
+            <option>Feminino</option>
+            <option>Outro</option>
+          </select>
+        </label>
+        <label>Data de nascimento<input id="vendNascimento" type="date"></label>
+        <label>E-mail<input id="vendEmail" type="email"></label>
+        <label>CEP<input id="vendCep" inputmode="numeric" maxlength="9" placeholder="00000-000"><small id="vendCepStatus"></small></label>
+        <label>Endereço<input id="vendEndereco"></label>
+        <label>Telefone<input id="vendTelefone" inputmode="numeric" placeholder="(00) 00000-0000"></label>
+        <label>Corretora<input id="vendCorretora"></label>
+        <label>CNPJ da corretora<input id="vendCnpj" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00"></label>
+      </div>
+    </section>
 
 
     <section class="card history-card">

@@ -83,6 +83,8 @@ async function buscarCNPJ(cnpjId="cnpj"){
       if(data.email) document.getElementById("email").value=data.email;
       if(data.ddd_telefone_1) document.getElementById("telefone").value=formatarTelefone(data.ddd_telefone_1);
       if(status){status.className="ok";status.textContent="Dados preenchidos automaticamente pelo CNPJ."}
+    }else{
+      if(data.razao_social) document.getElementById("vendCorretora").value=data.razao_social;
     }
   }catch(e){if(status){status.className="erro";status.textContent="Não foi possível consultar o CNPJ."}}
   hideLoading();
@@ -100,19 +102,19 @@ function montarParcelas(){
 }
 
 function aplicarMascaras(){
-  ["cnpj"].forEach(id=>{
+  ["cnpj","vendCnpj"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarCNPJ(el.value));
   });
-  ["cpfRepresentante"].forEach(id=>{
+  ["cpfRepresentante","vendCpf"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarCPF(el.value));
   });
-  ["cep"].forEach(id=>{
+  ["cep","vendCep"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarCEP(el.value));
   });
-  ["telefone"].forEach(id=>{
+  ["telefone","vendTelefone"].forEach(id=>{
     const el=document.getElementById(id);
     el?.addEventListener("input",()=>el.value=formatarTelefone(el.value));
   });
@@ -129,13 +131,20 @@ function aplicarMascaras(){
     }
   });
   document.getElementById("cep")?.addEventListener("blur",()=>buscarCEP("cep","endereco","municipio","uf","cepStatus"));
+  document.getElementById("vendCep")?.addEventListener("blur",()=>buscarCEP("vendCep","vendEndereco","municipio","uf","vendCepStatus"));
   document.getElementById("cnpj")?.addEventListener("blur",()=>buscarCNPJ("cnpj"));
+  document.getElementById("vendCnpj")?.addEventListener("blur",()=>buscarCNPJ("vendCnpj"));
+  document.getElementById("incluirVendedor")?.addEventListener("change",toggleCadastroVendedor);
 }
 
 function limparCampos(container){
-  container.querySelectorAll("input,textarea").forEach(el=>el.value="");
+  container.querySelectorAll("input,textarea").forEach(el=>{
+    if(el.type === "checkbox") el.checked = el.id === "incluirVendedor";
+    else el.value = "";
+  });
   container.querySelectorAll("select").forEach(el=>el.value="");
   container.querySelectorAll("small").forEach(el=>{el.textContent="";el.className=""});
+  toggleCadastroVendedor();
 }
 
 function limparSecao(btn){
@@ -150,9 +159,19 @@ function limparFormulario(){
   document.querySelectorAll(".history-item.editing").forEach(item=>item.classList.remove("editing"));
 }
 
+function vendedorAtivo(){
+  return document.getElementById("incluirVendedor")?.checked !== false;
+}
+
+function toggleCadastroVendedor(){
+  const ativo = vendedorAtivo();
+  const card = document.getElementById("vendedorCard");
+  if(card) card.classList.toggle("hidden-section", !ativo);
+}
+
 function adicionarBotoesLimparSecao(){
   document.querySelectorAll(".card").forEach(card=>{
-    if(card.classList.contains("history-card")) return;
+    if(card.classList.contains("history-card") || card.classList.contains("seller-toggle-card")) return;
     const h2 = card.querySelector("h2");
     if(!h2 || card.querySelector(".clear-section-btn")) return;
     const header = document.createElement("div");
@@ -171,7 +190,8 @@ function adicionarBotoesLimparSecao(){
 function obterCamposFormulario(){
   const data = {};
   document.querySelectorAll("input,select,textarea").forEach(el=>{
-    if(el.id) data[el.id] = el.value;
+    if(!el.id) return;
+    data[el.id] = el.type === "checkbox" ? el.checked : el.value;
   });
   return data;
 }
@@ -179,7 +199,10 @@ function obterCamposFormulario(){
 function preencherFormulario(data={}){
   Object.entries(data).forEach(([id,value])=>{
     const el = document.getElementById(id);
-    if(el) el.value = value || "";
+    if(el){
+      if(el.type === "checkbox") el.checked = Boolean(value);
+      else el.value = value || "";
+    }
   });
 }
 
@@ -227,6 +250,7 @@ function carregarResumo(id){
   if(!item) return;
   preencherFormulario(item.values);
   resumoEmEdicaoId = id;
+  toggleCadastroVendedor();
   renderHistorico();
   window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -598,6 +622,36 @@ function paginaResumoContratual(doc){
   doc.setTextColor(0,0,0);
 }
 
+
+function paginaResumoVendedor(doc){
+  drawLogo(doc);
+  drawWatermark(doc);
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(17);
+  doc.setTextColor(151,0,70);
+  doc.text("Resumo Vendedor",105,32,{align:"center"});
+  doc.setTextColor(0,0,0);
+  let x=5,y=42,w=200;
+  headerBar(doc,"DADOS DO VENDEDOR",y); y+=9;
+  labelValue(doc,"NOME",$("vendNome"),x,y,w,10.5,40,8); y+=10.5;
+  labelValue(doc,"CPF",$("vendCpf"),x,y,85,10.5,40,8);
+  labelValue(doc,"RG",$("vendRg"),x+85,y,55,10.5,14,8);
+  labelValue(doc,"SEXO",$("vendSexo"),x+140,y,60,10.5,22,8); y+=10.5;
+  labelValue(doc,"DATA DE NASCIMENTO",$("vendNascimento"),x,y,85,10.5,45,8);
+  labelValue(doc,"E-MAIL",$("vendEmail"),x+85,y,115,10.5,24,8); y+=10.5;
+  labelValue(doc,"ENDEREÇO",$("vendEndereco"),x,y,135,10.5,43,8);
+  labelValue(doc,"CEP",$("vendCep"),x+135,y,65,10.5,18,8); y+=10.5;
+  labelValue(doc,"TELEFONE",$("vendTelefone"),x,y,w,10.5,42,8); y+=10.5;
+  labelValue(doc,"CORRETORA",$("vendCorretora"),x,y,w,10.5,42,8); y+=10.5;
+  labelValue(doc,"CNPJ",$("vendCnpj"),x,y,w,10.5,42,8);
+  doc.setTextColor(151,0,70);
+  doc.setFontSize(7);
+  doc.text("evosaude.com.br",105,287,{align:"center"});
+  doc.setFillColor(151,0,70);
+  doc.rect(0,292,210,5,"F");
+  doc.setTextColor(0,0,0);
+}
+
 async function gerarPDF(){
   try{
     showLoading("Gerando PDF...");
@@ -617,6 +671,10 @@ async function gerarPDF(){
     });
 
     paginaResumoContratual(doc);
+    if(vendedorAtivo()){
+      doc.addPage();
+      paginaResumoVendedor(doc);
+    }
     salvarResumoLocal(true);
 
     hideLoading();
@@ -638,5 +696,6 @@ document.addEventListener("DOMContentLoaded",()=>{
   montarParcelas();
   aplicarMascaras();
   adicionarBotoesLimparSecao();
+  toggleCadastroVendedor();
   renderHistorico();
 });
