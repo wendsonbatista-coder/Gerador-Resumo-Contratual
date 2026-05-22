@@ -41,6 +41,53 @@ function formatarPercentual(v){
   return n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+"%";
 }
 
+const AUTO_VENDEDOR_MAP = [
+  ["representante", "vendNome"],
+  ["cpfRepresentante", "vendCpf"],
+  ["email", "vendEmail"],
+  ["cep", "vendCep"],
+  ["endereco", "vendEndereco"],
+  ["telefone", "vendTelefone"],
+  ["razaoSocial", "vendCorretora"],
+  ["cnpj", "vendCnpj"]
+];
+
+function preencherAutomaticoVendedor(destinoId, valor){
+  const destino = document.getElementById(destinoId);
+  if(!destino) return;
+  const novoValor = valor || "";
+  const podeAtualizar = !destino.value || destino.dataset.autoFilled === "true";
+  if(podeAtualizar){
+    destino.value = novoValor;
+    destino.dataset.autoFilled = novoValor ? "true" : "";
+  }
+}
+
+function sincronizarDadosVendedor(){
+  if(!vendedorAtivo()) return;
+  AUTO_VENDEDOR_MAP.forEach(([origemId, destinoId])=>{
+    preencherAutomaticoVendedor(destinoId, $(origemId));
+  });
+}
+
+function monitorarAlteracaoManualVendedor(){
+  AUTO_VENDEDOR_MAP.forEach(([, destinoId])=>{
+    const el = document.getElementById(destinoId);
+    el?.addEventListener("input",()=>{
+      el.dataset.autoFilled = "false";
+    });
+  });
+}
+
+function monitorarPreenchimentoAutomaticoVendedor(){
+  AUTO_VENDEDOR_MAP.forEach(([origemId])=>{
+    const el = document.getElementById(origemId);
+    el?.addEventListener("input",()=>sincronizarDadosVendedor());
+    el?.addEventListener("change",()=>sincronizarDadosVendedor());
+    el?.addEventListener("blur",()=>sincronizarDadosVendedor());
+  });
+}
+
 async function buscarCEP(cepId="cep", enderecoId="endereco", municipioId="municipio", ufId="uf", statusId="cepStatus"){
   const cep=somenteDigitos($(cepId));
   const status=document.getElementById(statusId);
@@ -58,6 +105,7 @@ async function buscarCEP(cepId="cep", enderecoId="endereco", municipioId="munici
     document.getElementById(ufId).value=data.uf||"";
     if(document.getElementById("estado") && cepId==="cep") document.getElementById("estado").value=data.uf||"";
     if(status){status.className="ok";status.textContent="Endereço preenchido automaticamente."}
+    if(cepId==="cep") sincronizarDadosVendedor();
   }catch(e){if(status){status.className="erro";status.textContent="Não foi possível consultar o CEP."}}
   hideLoading();
 }
@@ -83,6 +131,7 @@ async function buscarCNPJ(cnpjId="cnpj"){
       if(data.email) document.getElementById("email").value=data.email;
       if(data.ddd_telefone_1) document.getElementById("telefone").value=formatarTelefone(data.ddd_telefone_1);
       if(status){status.className="ok";status.textContent="Dados preenchidos automaticamente pelo CNPJ."}
+      sincronizarDadosVendedor();
     }else{
       if(data.razao_social) document.getElementById("vendCorretora").value=data.razao_social;
     }
@@ -167,6 +216,7 @@ function toggleCadastroVendedor(){
   const ativo = vendedorAtivo();
   const card = document.getElementById("vendedorCard");
   if(card) card.classList.toggle("hidden-section", !ativo);
+  if(ativo) sincronizarDadosVendedor();
 }
 
 function adicionarBotoesLimparSecao(){
@@ -364,8 +414,16 @@ function labelValue(doc,label,value,x,y,w,h,lw=28,size=7){
   fitText(doc,value,x+lw+2,y+h/2+2.1,w-lw-3,7,false);
 }
 function checkOption(doc, selected, value, x, y, label){
-  doc.setFont("helvetica","bold"); doc.setFontSize(6.5);
-  doc.text("(   )",x,y); if(selected===value) doc.text("X",x+2.4,y);
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(0,0,0);
+  doc.text("(",x,y);
+  doc.text(")",x+6.2,y);
+  if(selected===value){
+    doc.setTextColor(151,0,70);
+    doc.text("X",x+2.8,y);
+    doc.setTextColor(0,0,0);
+  }
   doc.text(label,x+13,y);
 }
 
@@ -652,6 +710,18 @@ function paginaResumoVendedor(doc){
   doc.setTextColor(0,0,0);
 }
 
+function gerarNomeArquivoPDF(){
+  const razao = $("razaoSocial") || "Sem Razao Social";
+  const nomeLimpo = razao
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return `Resumo Contratual Evo - ${nomeLimpo || "Sem Razao Social"}.pdf`;
+}
+
 async function gerarPDF(){
   try{
     showLoading("Gerando PDF...");
@@ -680,7 +750,7 @@ async function gerarPDF(){
     hideLoading();
 
     setTimeout(()=>{
-      doc.save("resumo-contratual-evo.pdf");
+      doc.save(gerarNomeArquivoPDF());
     },100);
 
   }catch(error){
@@ -695,6 +765,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   showSkeleton();
   montarParcelas();
   aplicarMascaras();
+  monitorarAlteracaoManualVendedor();
+  monitorarPreenchimentoAutomaticoVendedor();
   adicionarBotoesLimparSecao();
   toggleCadastroVendedor();
   renderHistorico();
